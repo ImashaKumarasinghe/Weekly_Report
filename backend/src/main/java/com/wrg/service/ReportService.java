@@ -21,11 +21,16 @@ public class ReportService {
     private final WeeklyReportRepository reportRepository;
     private final ProjectRepository projectRepository;
     private final CurrentUserService currentUserService;
+    private final ProjectService projectService;
 
     public ReportResponse create(ReportRequest request) {
         User user = currentUserService.getCurrentUser();
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(() -> new ApiException("Project not found", HttpStatus.NOT_FOUND));
+
+        if (!projectService.isAccessibleToUser(project, user)) {
+            throw new ApiException("You are not assigned to this project", HttpStatus.FORBIDDEN);
+        }
 
         WeeklyReport report = WeeklyReport.builder()
                 .user(user)
@@ -46,9 +51,14 @@ public class ReportService {
 
     public ReportResponse update(Long id, ReportRequest request) {
         WeeklyReport report = getOwnedReportOrThrow(id);
+        User user = currentUserService.getCurrentUser();
 
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(() -> new ApiException("Project not found", HttpStatus.NOT_FOUND));
+
+        if (!projectService.isAccessibleToUser(project, user)) {
+            throw new ApiException("You are not assigned to this project", HttpStatus.FORBIDDEN);
+        }
 
         report.setProject(project);
         report.setWeekStartDate(request.getWeekStartDate());

@@ -14,3 +14,5 @@ frontend/.env
 .vscode/
 *.iml
 .DS_Store
+
+backend/src/main/resources/application.yml

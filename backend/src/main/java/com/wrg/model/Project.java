@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "projects")
@@ -28,6 +30,20 @@ public class Project {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    /**
+     * Team members assigned to this project. If empty, the project is treated
+     * as open to every team member (backward-compatible default). If non-empty,
+     * only assigned members (plus any manager) can see or report against it.
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "project_members",
+            joinColumns = @JoinColumn(name = "project_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    @Builder.Default
+    private Set<User> members = new HashSet<>();
 
     @Builder.Default
     private Instant createdAt = Instant.now();

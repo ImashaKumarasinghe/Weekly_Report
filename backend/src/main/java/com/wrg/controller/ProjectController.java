@@ -19,7 +19,7 @@ public class ProjectController {
 
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> getAll() {
-        return ResponseEntity.ok(projectService.getAll());
+        return ResponseEntity.ok(projectService.getVisibleForCurrentUser());
     }
 
     @PostMapping

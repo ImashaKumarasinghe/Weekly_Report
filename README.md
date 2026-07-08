@@ -55,12 +55,13 @@ The API starts on **http://localhost:8080**.
 
 ### Optional: enable the AI Chat Assistant
 
-The "Good to Have" AI assistant (manager-only) calls the Anthropic API. It's fully
-optional — the app works without it, and the endpoint returns a friendly message if
-unconfigured.
+The "Good to Have" AI assistant (manager-only) calls the Google Gemini API. It's
+fully optional — the app works without it, and the endpoint returns a friendly
+message if unconfigured. Gemini has a permanent free tier with no card required —
+get a key at https://aistudio.google.com/apikey.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export GEMINI_API_KEY=your-key-here
 ```
 
 ## 4. Run the frontend
@@ -68,7 +69,6 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # defaults to http://localhost:8080, edit if needed
 npm run dev
 ```
 
@@ -98,16 +98,70 @@ The app starts on **http://localhost:5173**.
   column set (not a flexible/JSON schema), so every user's report has identical
   fields in identical order — this is what makes reports comparable across the
   team dashboard.
+- **Project membership & visibility**: `Project` has a many-to-many `members`
+  relationship to `User` (join table `project_members`). When creating or
+  editing a project, a manager can optionally assign specific team members to
+  it. A project with **no** members assigned is open to everyone (backward
+  compatible default); a project **with** members assigned is only visible to
+  — and reportable-against by — those members (managers always see every
+  project). Enforced both when listing projects
+  (`ProjectService.getVisibleForCurrentUser`) and when a report is
+  created/updated (`ReportService` rejects submissions against a project the
+  user isn't assigned to).
 - **Dashboard aggregation**: `DashboardService` computes summary metrics and chart
   data server-side per request (submission compliance, trend over the last 8
   weeks, workload by project, recent activity) rather than shipping raw report
   rows to the frontend for client-side aggregation.
-- **AI Chat Assistant (bonus)**: `AiAssistantService` does lightweight
-  retrieval — it pulls the last 8 weeks of report rows from MySQL, flattens them
-  into plain text, and passes that as context to Claude alongside the manager's
-  question. No vector DB is needed at this scale. Only report content and member/
-  project names are sent — never credentials or emails. See inline comments in
-  `AiAssistantService.java` for more on the data-privacy approach.
+- **AI Chat Assistant (bonus)**: see the dedicated section below.
+
+## AI Chat Assistant — approach, prompts, and data privacy
+
+Manager-only feature (`/api/ai/chat` and `/api/ai/summary`, both gated by
+`ROLE_MANAGER` in `SecurityConfig`), backed by the **Google Gemini API**
+(`gemini-2.5-flash` by default — configurable via `app.ai.model`). Gemini was
+chosen because it has a genuinely free, permanent tier with no billing/card
+required, making it easy for evaluators to run this locally.
+
+**Approach — lightweight RAG, no vector store.** At the scale of a single
+team's weekly reports, the relevant history fits comfortably in one prompt, so
+`AiAssistantService` queries MySQL directly for reports in a time window (8
+weeks for Q&A, 4 weeks for the summary), flattens each into a compact
+plain-text block (member, project, week, status, completed/planned/blockers),
+and passes that as a `systemInstruction` to Gemini's `generateContent`
+endpoint. No embeddings pipeline or extra infrastructure required, and every
+answer is traceable back to real rows in the `weekly_reports` table.
+
+**Two capabilities:**
+- **Conversational Q&A** — `POST /api/ai/chat` with `{ "question": "..." }`.
+  Free-form questions like *"What did the design team work on last week?"*
+  (project names double as team names).
+- **AI-generated team summary** — `GET /api/ai/summary`. A fixed three-section
+  report: Completed work / Recurring blockers / Workload imbalances, built
+  from the last 4 weeks of data. Triggered from the "Generate team summary"
+  button in the chat widget.
+
+**Prompt design.** Both prompts explicitly instruct the model to answer *only*
+from the supplied report data and to say so plainly if the data doesn't cover
+the question, rather than guessing — this keeps answers grounded and avoids
+inventing project/people details. The summary prompt fixes the three section
+headers so output is predictable and scannable regardless of what's in the
+data that week.
+
+**Data-privacy considerations:**
+- Restricted to the `MANAGER` role only.
+- Only report content for the requested window is sent — never the whole
+  database, and never other users' account data.
+- The only personal identifier sent is full name; emails, password hashes, and
+  auth tokens are never part of the prompt.
+- Read-only — nothing is written back to the database from this feature.
+- Chat history lives only in the browser widget's React state; nothing is
+  persisted server-side, and each request is stateless.
+- **Free-tier caveat**: Gemini's free tier may use prompt/response data to
+  improve Google's products (per the Gemini API terms). For report data that's
+  genuinely sensitive, use a paid-tier key instead, which carries a different
+  data-use contract — see https://ai.google.dev/gemini-api/terms.
+- If `GEMINI_API_KEY` isn't set, the feature degrades gracefully (returns a
+  message plus the raw matching context) instead of breaking the rest of the app.
 
 ## API summary
 
@@ -115,13 +169,15 @@ The app starts on **http://localhost:5173**.
 |---|---|---|
 | POST | `/api/auth/register` | Public |
 | POST | `/api/auth/login` | Public |
-| GET/POST | `/api/projects` | Any authenticated user (create/edit/delete = Manager) |
-| POST/PUT/DELETE | `/api/reports`, `/api/reports/{id}` | Owner or Manager |
+| GET | `/api/projects` | Any authenticated user — response scoped by role/membership |
+| POST/PUT/DELETE | `/api/projects/{id}` | Manager (accepts `memberIds` to assign the project) |
+| POST/PUT/DELETE | `/api/reports`, `/api/reports/{id}` | Owner or Manager (project must be accessible to the user) |
 | GET | `/api/reports/mine` | Any authenticated user |
 | GET | `/api/reports/team` | Manager (supports `userId`, `projectId`, `status`, `from`, `to` filters) |
 | GET | `/api/dashboard/summary` | Manager |
 | GET | `/api/users/team-members` | Manager |
 | POST | `/api/ai/chat` | Manager |
+| GET | `/api/ai/summary` | Manager |
 
 ## Database design
 
@@ -135,4 +191,5 @@ design rationale.
   and uniform, per the assignment brief).
 - Pagination and server-side sorting on `/api/reports/team` for larger teams.
 - Refresh tokens / shorter-lived access tokens instead of a single 24h JWT.
-- Assigning team members to specific projects (mentioned as optional in the brief).
+- Function-calling/tool-use for the AI assistant (e.g. letting it query specific
+  members or date ranges on demand) instead of a fixed context window.

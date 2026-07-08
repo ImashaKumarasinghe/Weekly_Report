@@ -5,6 +5,7 @@ import com.wrg.service.AiAssistantService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,5 +25,11 @@ public class AiController {
     public ResponseEntity<Map<String, String>> chat(@Valid @RequestBody AiChatRequest request) {
         String answer = aiAssistantService.ask(request.getQuestion());
         return ResponseEntity.ok(Map.of("answer", answer));
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<Map<String, String>> summary() {
+        String summary = aiAssistantService.generateSummary();
+        return ResponseEntity.ok(Map.of("summary", summary));
     }
 }

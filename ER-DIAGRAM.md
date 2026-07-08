@@ -8,6 +8,7 @@ shareable link for the submission.
 erDiagram
     USER ||--o{ WEEKLY_REPORT : "submits"
     PROJECT ||--o{ WEEKLY_REPORT : "categorizes"
+    USER }o--o{ PROJECT : "assigned to (via project_members)"
 
     USER {
         bigint id PK
@@ -25,6 +26,11 @@ erDiagram
         varchar description
         boolean active "soft delete flag"
         timestamp created_at
+    }
+
+    PROJECT_MEMBERS {
+        bigint project_id FK
+        bigint user_id FK
     }
 
     WEEKLY_REPORT {
@@ -57,6 +63,10 @@ erDiagram
 - **Project ↔ WeeklyReport**: one-to-many. Deleting a project is a **soft delete**
   (`active = false`) rather than a hard delete, so historical reports referencing
   it stay intact and the dashboard's trend charts remain accurate.
+- **User ↔ Project (`project_members`)**: many-to-many join table. An empty
+  member list means the project is open to the whole team (default); a
+  non-empty list restricts visibility and reporting to just those members, so
+  managers can scope sensitive or client-specific work to the right people.
 - **Fixed report shape**: every column on `WEEKLY_REPORT` is a real column, not a
   flexible key-value store — this is what guarantees every user's report has the
   exact same fields in the exact same order, so reports stay comparable across the

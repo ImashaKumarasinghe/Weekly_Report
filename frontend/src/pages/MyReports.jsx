@@ -57,7 +57,7 @@ export default function MyReports() {
       </div>
 
       {projects.length === 0 && !loading && (
-        <div className="empty-state">No projects have been set up yet. Ask a manager to add one before submitting a report.</div>
+        <div className="empty-state">No projects are visible to you yet. Ask a manager to add one, or assign you to an existing project.</div>
       )}
 
       {!loading && reports.length === 0 && projects.length > 0 && (
