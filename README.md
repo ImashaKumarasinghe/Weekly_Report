@@ -9,7 +9,7 @@ a consolidated, filterable dashboard across the whole team.
 weekly-report-app/
 ├── backend/    Spring Boot REST API
 ├── frontend/   React + Vite SPA
-├── ER-DIAGRAM.md
+├
 └── docker-compose.yml   (MySQL only, for local dev)
 ```
 

@@ -18,51 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * "Good to Have" AI Chat Assistant - backed by the Google Gemini API.
- *
- * APPROACH
- * --------
- * Lightweight, retrieval-based RAG - no vector database. At this scale (a
- * team's worth of weekly reports, a handful of months of history) the entire
- * relevant context comfortably fits inside a single prompt, so we simply:
- *   1. Query MySQL directly for reports in the requested time window.
- *   2. Flatten each report into a compact plain-text block (member, project,
- *      week, status, completed/planned/blockers).
- *   3. Pass that block to Gemini as a system instruction, alongside either
- *      the manager's free-form question (Q&A mode) or a fixed instruction
- *      asking for a structured summary (Summary mode).
- * This keeps the integration simple, cheap, and easy to audit - every answer
- * is traceable back to real rows in the reports table, and there's no
- * embedding pipeline or extra infrastructure to maintain.
- *
- * PROMPT DESIGN
- * -------------
- * The system prompt explicitly instructs the model to answer ONLY from the
- * supplied report data and to say so plainly if the data doesn't cover the
- * question, rather than guessing - this keeps answers grounded and avoids
- * hallucinated project/people details. The summary prompt additionally asks
- * for three fixed sections (Completed work / Recurring blockers / Workload
- * imbalances) so the output is predictable and easy to scan.
- *
- * DATA-PRIVACY CONSIDERATIONS
- * ----------------------------
- *  - Endpoint is restricted to MANAGER role only (enforced in SecurityConfig).
- *  - Only report content for the requested window (default: last 8 weeks) is
- *    sent - never the whole database, and never other managers' or team
- *    members' account data.
- *  - The only personal identifier included is full name. Emails, password
- *    hashes, and auth tokens are never part of the prompt.
- *  - Nothing is written back to the database - this is a read-only feature.
- *  - Conversation history is kept client-side only (in the browser widget's
- *    React state) and is never persisted server-side; each request to this
- *    service is stateless and independent.
- *  - If the Gemini API key isn't configured, the feature degrades gracefully
- *    instead of failing the rest of the app.
- *  - Note: on Gemini's free tier, prompt/response data may be used by Google
- *    to improve their products (see Gemini API terms). If that's a concern,
- *    switch to a paid-tier key, which carries a different data-use contract.
- */
+
 @Service
 @RequiredArgsConstructor
 public class AiAssistantService {
